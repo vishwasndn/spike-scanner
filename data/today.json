@@ -1,0 +1,15 @@
+{
+  "summary": {
+    "scan_date": "Not yet scanned",
+    "scan_time": "",
+    "total_gainers_found": 0,
+    "high_fade_score_count": 0,
+    "history_total": 0,
+    "history_pct_declined": 0,
+    "history_avg_return": 0,
+    "history_median_return": 0,
+    "high_score_pct_declined": 0
+  },
+  "candidates": [],
+  "recent_history": []
+}
