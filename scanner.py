@@ -335,6 +335,23 @@ def score_gainers(gainers):
         else:
             fade_probability = 49
 
+        # ── ACTIONABLE TRADE SIGNALS ──
+        spike_close = g['close']
+        entry_price = round(spike_close * 0.97, 2)       # Enter ~3% below spike close (wait for first dip)
+        target_price = round(spike_close * 0.75, 2)       # Target 25% decline from spike
+        stop_loss = round(spike_close * 1.15, 2)          # Stop loss 15% above spike close
+        risk_reward = round((spike_close - target_price) / (stop_loss - spike_close), 1) if stop_loss > spike_close else 0
+
+        # Signal strength
+        if fade_score >= 9 and g['close_vs_high_pct'] < -10:
+            signal = "STRONG FADE"
+        elif fade_score >= 6:
+            signal = "FADE"
+        elif fade_score >= 3:
+            signal = "WATCH"
+        else:
+            signal = "LOW CONVICTION"
+
         # Format market cap
         if mc >= 1e9:
             mc_str = f"${mc/1e9:.1f}B"
@@ -362,6 +379,11 @@ def score_gainers(gainers):
             'revenue_growth': safe_val(profile.get('revenue_growth', 0)),
             'fade_score': fade_score,
             'fade_probability': fade_probability,
+            'signal': signal,
+            'entry_price': entry_price,
+            'target_price': target_price,
+            'stop_loss': stop_loss,
+            'risk_reward': risk_reward,
             'fade_reasons': fade_reasons,
             'scan_timestamp': datetime.now().isoformat(),
         }
@@ -485,7 +507,7 @@ def save_today(scored_data, history):
 
 # ─── STEP 5: SEND EMAIL ALERT ───────────────────────────────────────────────
 def send_email_alert(scored_data, summary):
-    """Send email alert with today's top fade candidates."""
+    """Send email alert with today's top fade candidates. Only alerts on NEW tickers."""
     email_user = os.environ.get('EMAIL_USER', '')
     email_pass = os.environ.get('EMAIL_PASS', '')
     email_to = os.environ.get('EMAIL_TO', email_user)
@@ -494,11 +516,31 @@ def send_email_alert(scored_data, summary):
         print("\n   ⚠ Email not configured (set EMAIL_USER, EMAIL_PASS, EMAIL_TO env vars)")
         return
 
-    high_score = [s for s in scored_data if s['fade_score'] >= 6]
+    # ── Dedup: only email about NEW tickers not already alerted today ──
+    alerted_path = os.path.join(DATA_DIR, "alerted_today.json")
+    already_alerted = set()
+    today_str = datetime.now().strftime('%Y-%m-%d')
+    if os.path.exists(alerted_path):
+        try:
+            with open(alerted_path, 'r') as f:
+                alerted_data = json.load(f)
+            if alerted_data.get('date') == today_str:
+                already_alerted = set(alerted_data.get('tickers', []))
+            # If it's a new day, reset
+        except Exception:
+            pass
 
-    if not high_score and not scored_data:
-        print("   📭 No fade candidates today — skipping email")
+    new_candidates = [s for s in scored_data if s['ticker'] not in already_alerted]
+    high_score = [s for s in new_candidates if s['fade_score'] >= 6]
+
+    if not new_candidates:
+        print("   📭 No NEW fade candidates since last scan — skipping email")
         return
+
+    # Update alerted list
+    all_alerted = already_alerted | {s['ticker'] for s in scored_data}
+    with open(alerted_path, 'w') as f:
+        json.dump({'date': today_str, 'tickers': list(all_alerted)}, f)
 
     print(f"\n📧 Sending email alert to {email_to}...")
 
@@ -526,24 +568,30 @@ def send_email_alert(scored_data, summary):
             <table style="width: 100%; border-collapse: collapse; margin: 15px 0;">
                 <tr style="background: #f8f9fa;">
                     <th style="padding: 10px; text-align: left; border-bottom: 2px solid #ddd;">Ticker</th>
+                    <th style="padding: 10px; text-align: left; border-bottom: 2px solid #ddd;">Signal</th>
                     <th style="padding: 10px; text-align: left; border-bottom: 2px solid #ddd;">Spike</th>
                     <th style="padding: 10px; text-align: left; border-bottom: 2px solid #ddd;">Price</th>
-                    <th style="padding: 10px; text-align: left; border-bottom: 2px solid #ddd;">Score</th>
-                    <th style="padding: 10px; text-align: left; border-bottom: 2px solid #ddd;">Prob</th>
-                    <th style="padding: 10px; text-align: left; border-bottom: 2px solid #ddd;">Why</th>
+                    <th style="padding: 10px; text-align: left; border-bottom: 2px solid #ddd;">Entry</th>
+                    <th style="padding: 10px; text-align: left; border-bottom: 2px solid #ddd;">Target</th>
+                    <th style="padding: 10px; text-align: left; border-bottom: 2px solid #ddd;">Stop</th>
+                    <th style="padding: 10px; text-align: left; border-bottom: 2px solid #ddd;">R:R</th>
                 </tr>
         """
         for s in high_score[:10]:
-            score_color = '#e74c3c' if s['fade_score'] >= 9 else '#f39c12'
+            signal = s.get('signal', 'FADE')
+            sig_color = '#e74c3c' if 'STRONG' in signal else '#f39c12'
             html_body += f"""
                 <tr>
                     <td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>{s['ticker']}</strong><br>
-                        <small style="color:#888;">{s.get('company_name','')}</small></td>
+                        <small style="color:#888;">{s.get('company_name','')}</small><br>
+                        <small style="color:#999;">{', '.join(s.get('fade_reasons', [])[:2])}</small></td>
+                    <td style="padding: 8px; border-bottom: 1px solid #eee; color: {sig_color}; font-weight: bold;">{signal}</td>
                     <td style="padding: 8px; border-bottom: 1px solid #eee; color: #27ae60; font-weight: bold;">+{s['daily_gain_pct']}%</td>
                     <td style="padding: 8px; border-bottom: 1px solid #eee;">${s['close']}</td>
-                    <td style="padding: 8px; border-bottom: 1px solid #eee; color: {score_color}; font-weight: bold;">{s['fade_score']}/14</td>
-                    <td style="padding: 8px; border-bottom: 1px solid #eee;">{s['fade_probability']}%</td>
-                    <td style="padding: 8px; border-bottom: 1px solid #eee; font-size: 12px; color: #666;">{', '.join(s['fade_reasons'][:3])}</td>
+                    <td style="padding: 8px; border-bottom: 1px solid #eee; color: #3498db; font-weight: bold;">${s.get('entry_price', '')}</td>
+                    <td style="padding: 8px; border-bottom: 1px solid #eee; color: #e74c3c;">${s.get('target_price', '')}</td>
+                    <td style="padding: 8px; border-bottom: 1px solid #eee; color: #f39c12;">${s.get('stop_loss', '')}</td>
+                    <td style="padding: 8px; border-bottom: 1px solid #eee;">{s.get('risk_reward', '')}:1</td>
                 </tr>
             """
         html_body += "</table>"
