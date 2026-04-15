@@ -2,7 +2,8 @@ name: Daily Spike Scanner
 
 on:
   schedule:
-    - cron: '30 22 * * 1-5'
+    - cron: '0 14,15,16,17,18,19 * * 1-5'
+    - cron: '30 20 * * 1-5'
   workflow_dispatch:
 
 permissions:
@@ -35,5 +36,5 @@ jobs:
           git config user.name "Spike Scanner Bot"
           git config user.email "bot@spike-scanner"
           git add data/
-          git diff --staged --quiet || git commit -m "Daily scan: $(date +%Y-%m-%d)"
+          git diff --staged --quiet || git commit -m "Scan: $(date +%Y-%m-%d_%H:%M)"
           git push
