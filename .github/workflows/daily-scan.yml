@@ -1,0 +1,39 @@
+name: Daily Spike Scanner
+
+on:
+  schedule:
+    - cron: '30 22 * * 1-5'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install yfinance pandas numpy
+
+      - name: Run scanner
+        env:
+          EMAIL_USER: ${{ secrets.EMAIL_USER }}
+          EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
+          EMAIL_TO: ${{ secrets.EMAIL_TO }}
+        run: python scanner.py
+
+      - name: Commit and push data
+        run: |
+          git config user.name "Spike Scanner Bot"
+          git config user.email "bot@spike-scanner"
+          git add data/
+          git diff --staged --quiet || git commit -m "Daily scan: $(date +%Y-%m-%d)"
+          git push
