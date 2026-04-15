@@ -165,7 +165,7 @@
                 document.getElementById('candidates').innerHTML = `
                     <div class="empty-state">
                         <h3>No scan data available yet</h3>
-                        <p>The scanner runs daily at 5:30 PM ET (after market close). Check back after the first run.</p>
+                        <p>The scanner runs hourly during market hours (10 AM - 4:30 PM ET). Check back after the first run.</p>
                     </div>`;
             }
         }
@@ -212,6 +212,10 @@
                     `<span class="reason-tag">${r}</span>`
                 ).join('');
 
+                const sigColor = (c.signal || '').includes('STRONG') ? '#e74c3c' :
+                                 (c.signal || '').includes('FADE') ? '#f39c12' :
+                                 (c.signal || '').includes('WATCH') ? '#3498db' : '#667788';
+
                 return `
                 <div class="stock-card">
                     <div class="top">
@@ -219,21 +223,31 @@
                             <div class="ticker">${c.ticker}</div>
                             <div class="company">${c.company_name || ''} · ${c.sector || ''}</div>
                         </div>
-                        <div class="spike-badge">+${c.daily_gain_pct}%</div>
+                        <div>
+                            <div class="spike-badge">+${c.daily_gain_pct}%</div>
+                            <div style="text-align:center;margin-top:4px;font-weight:700;font-size:0.8rem;color:${sigColor};">${c.signal || ''}</div>
+                        </div>
                     </div>
                     <div class="score-row">
                         <div class="fade-score ${scoreClass}">Fade Score: ${c.fade_score}/14</div>
                         <div class="prob">${c.fade_probability}% fade probability</div>
                     </div>
+                    <div style="background:#0d1117;border-radius:8px;padding:12px;margin:10px 0;">
+                        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;text-align:center;">
+                            <div><div style="color:#667788;font-size:0.7rem;">PRICE</div><div style="font-weight:700;">$${c.close}</div></div>
+                            <div><div style="color:#3498db;font-size:0.7rem;">ENTRY</div><div style="font-weight:700;color:#3498db;">$${c.entry_price || '—'}</div></div>
+                            <div><div style="color:#e74c3c;font-size:0.7rem;">TARGET</div><div style="font-weight:700;color:#e74c3c;">$${c.target_price || '—'}</div></div>
+                            <div><div style="color:#f39c12;font-size:0.7rem;">STOP</div><div style="font-weight:700;color:#f39c12;">$${c.stop_loss || '—'}</div></div>
+                        </div>
+                        <div style="text-align:center;margin-top:6px;font-size:0.8rem;color:#8899aa;">Risk/Reward: ${c.risk_reward || '—'}:1</div>
+                    </div>
                     <div class="details">
-                        <div class="d-label">Price</div><div class="d-val">$${c.close}</div>
                         <div class="d-label">Market Cap</div><div class="d-val">${c.market_cap_str || '—'}</div>
                         <div class="d-label">Volume</div><div class="d-val">${(c.volume || 0).toLocaleString()}</div>
                         <div class="d-label">Vol Ratio</div><div class="d-val">${c.volume_ratio}x</div>
                         <div class="d-label">Gap Up</div><div class="d-val">${c.gap_up_pct}%</div>
                         <div class="d-label">Close/High</div><div class="d-val">${c.close_vs_high_pct}%</div>
                         <div class="d-label">Profitable</div><div class="d-val">${c.is_profitable ? '✓' : '✗'}</div>
-                        <div class="d-label">Short %</div><div class="d-val">${c.short_pct_float ? (c.short_pct_float * 100).toFixed(1) + '%' : '—'}</div>
                     </div>
                     <div class="reasons">${reasons}</div>
                 </div>`;
